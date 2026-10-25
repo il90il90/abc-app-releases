@@ -1,0 +1,30 @@
+name: Publish release
+
+# Publishes every APK committed under apk/ as a GitHub Release of this repo. The source
+# repo is private; signed builds are committed here as apk/abc-app-<version>.apk plus a
+# stable apk/abc-app.apk, so the "latest" download link never changes.
+on:
+  push:
+    branches: [main]
+    paths: ["apk/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create missing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for apk in apk/abc-app-*.apk; do
+            v=$(basename "$apk" .apk); v=${v#abc-app-}
+            if gh release view "v$v" >/dev/null 2>&1; then echo "v$v already released"; continue; fi
+            notes="apk/notes-$v.md"; [ -f "$notes" ] || { echo "v$v" > notes.md; notes=notes.md; }
+            cp "$apk" abc-app.apk
+            gh release create "v$v" "$apk" abc-app.apk --title "v$v" --notes-file "$notes" --latest
+          done
